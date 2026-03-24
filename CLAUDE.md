@@ -22,8 +22,7 @@ $env:KIS_ACCOUNT_NO = "여기에_계좌번호"  # 모의투자 계좌
 
 ### 2. 의존성 설치
 ```bash
-pip install mojito requests python-dotenv flask
-npm install @modelcontextprotocol/sdk
+pip install -r requirements.txt
 ```
 
 ### 3. 프로젝트 구조
@@ -32,15 +31,20 @@ stock-screener-mcp/
 ├── CLAUDE.md              ← 이 파일
 ├── .env                   ← API 키 (gitignore 필수)
 ├── .gitignore
+├── requirements.txt       ← Python 의존성
+├── Dockerfile             ← 클라우드 배포용
+├── railway.json           ← Railway 배포 설정
 ├── server/
-│   ├── mcp_server.py      ← MCP 서버 메인
+│   ├── mcp_server.py      ← MCP 서버 메인 (stdio/SSE 듀얼 트랜스포트)
 │   ├── kis_client.py      ← 한투 API 클라이언트
+│   ├── ws_night_futures.py ← 야간선물 WebSocket 수신기
 │   ├── pivot.py            ← 피봇 포인트 계산
 │   └── screener.py         ← 주도주 스크리닝 로직
 ├── config/
 │   └── tickers.json       ← 주요 종목 코드 매핑
 └── tests/
-    └── test_kis.py        ← API 연결 테스트
+    ├── test_kis.py        ← API 연결 테스트
+    └── test_night_session.py ← 야간세션 테스트
 ```
 
 ## 핵심 기능 명세
@@ -160,7 +164,11 @@ KRX-Eurex 연계 야간선물 실시간 시세 조회
 
 ## MCP 서버 설정
 
-### Claude Code에서 등록
+### 트랜스포트 모드
+- **stdio** (기본값): Claude Code / Claude Desktop에서 로컬 실행
+- **SSE**: 클라우드 배포용 (`MCP_TRANSPORT=sse` 환경변수로 전환)
+
+### Claude Code에서 등록 (로컬)
 ```bash
 claude mcp add stock-screener -- python server/mcp_server.py
 ```
@@ -180,6 +188,27 @@ claude mcp add stock-screener -- python server/mcp_server.py
         }
     }
 }
+```
+
+### 웹 Claude (claude.ai)에서 사용 — 클라우드 배포
+Railway에 배포 완료됨. 설정 방법:
+1. claude.ai → Settings → Integrations → Add custom integration
+2. URL: `https://stock-screener-mcp-production.up.railway.app/sse`
+
+### Railway 클라우드 배포 정보
+- **플랫폼**: Railway (Dockerfile 기반)
+- **환경변수** (Railway Variables에 설정):
+  - `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_NO` — 한투 API 키
+  - `MCP_TRANSPORT=sse` — SSE 모드 활성화
+- **GitHub 연동**: push 시 자동 재배포
+
+### 새 PC에서 로컬 환경 셋업
+```bash
+git clone https://github.com/peppermint1231/stock-screener-mcp.git
+cd stock-screener-mcp
+pip install -r requirements.txt
+# .env 파일 생성 (KIS_APP_KEY, KIS_APP_SECRET, KIS_ACCOUNT_NO)
+claude mcp add stock-screener -- python server/mcp_server.py
 ```
 
 ## 스크리닝 로직 (이전 스킬에서 이식)
