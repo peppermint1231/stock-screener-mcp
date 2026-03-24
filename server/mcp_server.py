@@ -178,4 +178,9 @@ def lookup_ticker(name: str) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    import os
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport == "sse":
+        mcp.run(transport="sse")
+    else:
+        mcp.run()
