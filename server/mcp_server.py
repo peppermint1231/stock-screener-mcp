@@ -19,7 +19,7 @@ mcp = FastMCP("stock-screener", dependencies=["requests", "python-dotenv", "webs
 client = KISClient(mock=False)
 
 # 야간선물 WebSocket 자동 시작
-ws_night_futures.start("101W9000")
+ws_night_futures.start("A01606")
 
 # 종목 코드 매핑 로드
 TICKERS_FILE = Path(__file__).parent.parent / "config" / "tickers.json"
