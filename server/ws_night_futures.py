@@ -35,14 +35,14 @@ def get_approval_key():
 def _parse_night_futures(data: str) -> dict | None:
     """야간선물 체결 데이터 파싱 (H0MFCNT0)
 
-    수신 형식: tr_id|tr_type|tr_key|체결데이터(^구분)
+    수신 형식: 0|tr_type|tr_key|체결데이터(^구분)
+    필드 매핑 (49개):
+      [0] 종목코드  [1] 체결시간  [2] 전일대비  [5] 현재가
+      [6] 시가  [7] 고가  [8] 저가  [10] 누적거래량
+      [11] 누적거래대금  [13] 등락률  [18] 미결제약정
     """
     parts = data.split("|")
     if len(parts) < 4:
-        return None
-
-    tr_id = parts[0]
-    if tr_id != "H0MFCNT0":
         return None
 
     fields = parts[3].split("^")
@@ -50,16 +50,17 @@ def _parse_night_futures(data: str) -> dict | None:
         return None
 
     return {
-        "code": fields[0],           # 종목코드
-        "time": fields[1],           # 체결시간 HHMMSS
-        "price": float(fields[2]),   # 현재가
-        "change": float(fields[4]),  # 전일대비
-        "change_pct": float(fields[5]),  # 등락률
-        "open": float(fields[7]),    # 시가
-        "high": float(fields[8]),    # 고가
-        "low": float(fields[9]),     # 저가
-        "volume": int(fields[10]),   # 누적거래량
+        "code": fields[0],                # 종목코드
+        "time": fields[1],                # 체결시간 HHMMSS
+        "price": float(fields[5]),        # 현재가
+        "change": float(fields[2]),       # 전일대비
+        "change_pct": float(fields[13]),  # 등락률
+        "open": float(fields[6]),         # 시가
+        "high": float(fields[7]),         # 고가
+        "low": float(fields[8]),          # 저가
+        "volume": int(fields[10]),        # 누적거래량
         "trade_amount": int(fields[11]) if fields[11] else 0,  # 누적거래대금
+        "open_interest": int(fields[18]) if fields[18] else 0,  # 미결제약정
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -68,7 +69,12 @@ async def _ws_loop(code: str):
     """WebSocket 수신 루프"""
     global _running
 
-    approval_key = get_approval_key()
+    try:
+        approval_key = get_approval_key()
+    except Exception as e:
+        print(f"[WS] approval_key 발급 실패: {e}")
+        _running = False
+        return
 
     subscribe_msg = json.dumps({
         "header": {
@@ -103,7 +109,11 @@ async def _ws_loop(code: str):
                         continue
 
                     # 체결 데이터
-                    parsed = _parse_night_futures(raw)
+                    try:
+                        parsed = _parse_night_futures(raw)
+                    except Exception as e:
+                        print(f"[WS] 파싱 에러: {e}")
+                        continue
                     if parsed:
                         with _lock:
                             _latest[parsed["code"]] = parsed
@@ -116,7 +126,7 @@ async def _ws_loop(code: str):
                 await asyncio.sleep(3)
 
 
-def start(code: str = "101W9000"):
+def start(code: str = "A01606"):
     """백그라운드 스레드에서 야간선물 수신 시작
 
     Args:
@@ -166,7 +176,7 @@ def get_all() -> dict:
 if __name__ == "__main__":
     import time
     print("야간선물 WebSocket 테스트 (Ctrl+C로 종료)")
-    start("101W9000")
+    start("A01606")
     try:
         while True:
             time.sleep(2)
